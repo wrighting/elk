@@ -1,0 +1,434 @@
+input {
+  beats {
+    port => 5044
+    codec => multiline {
+	pattern => "^\s"
+	what => "previous"
+    }
+  }
+}
+
+####################################################################################################
+# Here we start parsing the incoming messages and create fields we can use for reporting in Kibana #
+####################################################################################################
+
+
+################
+# alfresco.log #
+################
+
+filter {
+  if "alfrescoLog" in [tags] {
+
+    # replace double blank space with single blank space
+    mutate {
+      gsub => [
+        "message", "  ", " "
+      ]
+    }
+
+    # Match incoming log entries to fields
+    grok { match => [ "message", "%{TIMESTAMP_ISO8601:logdate}\s*%{LOGLEVEL} %{NOTSPACE:class} Got: %{NUMBER} in %{DATA:responseTime} ms"] }
+    grok { match => [ "message", "%{TIMESTAMP_ISO8601:logdate}\s*%{LOGLEVEL} %{NOTSPACE:class} %{WORD:action} %{WORD} %{NOTSPACE:script} in %{DATA:responseTime}ms"] }
+    grok { match => [ "message", "%{TIMESTAMP_ISO8601:logdate}\s*%{LOGLEVEL} %{NOTSPACE:class} %{NOTSPACE:thread} %{WORD:action} %{WORD} %{NOTSPACE:script} in %{DATA:responseTime}ms"] }
+    grok { match => [ "message", "%{TIMESTAMP_ISO8601:logdate}\s*%{LOGLEVEL:logLevel} %{NOTSPACE:class}\s*%{GREEDYDATA:Msg}" ] }
+
+
+    mutate {
+      gsub => [ "duration", ",", "" ]
+    }
+
+    mutate {
+      convert => [ "duration", "float" ]
+    }
+
+    mutate {
+      gsub => [ "responseTime", ",", "" ]
+    }
+
+    mutate {
+      convert => [ "responseTime", "float" ]
+    }
+
+    date {
+       match => ["logdate" , "yyyy-MM-dd HH:mm:ss,SSS"]
+       target => "@timestamp"
+    }
+
+    grok {
+      match => [ "message", "Exception" ]
+      add_tag => [ "Exception"]
+    }
+
+    grok {
+      match => [ "message", "NullPointerException" ]
+      add_tag => [ "NullPointerException"]
+    }
+
+    grok {
+      match => [ "message", "OutOfMemoryError" ]
+      add_tag => [ "OutOfMemoryError"]
+    }
+
+    grok {
+      match => [ "message", "Too many open files" ]
+      add_tag => [ "TooManyOpenFiles"]
+    }
+  }
+}
+
+#############
+# share.log #
+#############
+
+filter {
+  if "shareLog" in [tags] {
+
+    # replace double blank space with single blank space
+    mutate {
+      gsub => [
+        "message", "  ", " "
+      ]
+    }
+
+    grok {
+      match => [ "message", "%{TIMESTAMP_ISO8601:logdate}\s*%{LOGLEVEL:logLevel} %{NOTSPACE:class} %{GREEDYDATA:data}" ]
+      add_tag => [ "%{logLevel}" ]
+      add_field => [ "Msg", "%{class} %{data}" ]
+    }
+
+    date {
+       match => ["logdate" , "yyyy-MM-dd HH:mm:ss,SSS"]
+       target => "@timestamp"
+    }
+
+    grok {
+      match => [ "message", "Exception" ]
+      add_tag => [ "Exception"]
+    }
+
+    grok {
+      match => [ "message", "NullPointerException" ]
+      add_tag => [ "NullPointerException"]
+    }
+
+    grok {
+      match => [ "message", "OutOfMemoryError" ]
+      add_tag => [ "OutOfMemoryError"]
+    }
+
+    grok {
+      match => [ "message", "Too many open files" ]
+      add_tag => [ "FileHandles"]
+    }
+  }
+}
+
+
+############
+# solr.log #
+############
+
+filter {
+  if "solrLog" in [tags] {
+
+    # replace double blank space with single blank space
+    mutate {
+      gsub => [
+      "message", "  ", " "
+      ]
+    }
+
+    grok {
+      match => [ "message", "%{TIMESTAMP_ISO8601:logdate}\s*%{LOGLEVEL:logLevel} %{NOTSPACE:class} %{GREEDYDATA:data}" ]
+      add_tag => [ "%{logLevel}" ]
+      add_field => [ "Msg", "%{class} %{data}" ]
+    }
+
+    date {
+       match => ["logdate" , "yyyy-MM-dd HH:mm:ss,SSS"]
+       target => "@timestamp"
+    }
+
+    grok {
+      match => [ "message", "Exception" ]
+      add_tag => [ "Exception"]
+    }
+
+    grok {
+      match => [ "message", "NullPointerException" ]
+      add_tag => [ "NullPointerException"]
+    }
+
+    grok {
+      match => [ "message", "OutOfMemoryError" ]
+      add_tag => [ "OutOfMemoryError"]
+    }
+
+    grok {
+      match => [ "message", "Too many open files" ]
+      add_tag => [ "FileHandles"]
+    }
+  }
+}
+
+#########################
+# Filter for Server CPU #
+#########################
+
+filter {
+  if [type] == "AlfrescoCPU" {
+    grok {
+      match => [ "message", "%{NUMBER:AlfrescoCPU}" ]
+      #add_field => [ "cpu", "%{Alfresco}" ]
+      add_tag => [ "Alfresco" ]
+    }
+
+    mutate { convert => [ "cpu", "float" ] }
+  }
+}
+
+filter {
+  if [type] == "ServerCPU" {
+    grok {
+      match => [ "message", "us,%{NUMBER:cpu}" ]
+      add_tag => [ "User" ]
+    }
+
+    grok {
+      match => [ "message", "sy,%{NUMBER:cpu}" ]
+      add_tag => [ "System" ]
+    }
+
+    grok {
+      match => [ "message", "id,%{NUMBER:cpu}" ]
+      add_tag => [ "Idle" ]
+    }
+
+    mutate { convert => [ "cpu", "float" ] }
+  }
+}
+
+############
+# Commands #
+############
+filter {
+  if [type] == "command" {
+    grok { match => [ "message", "%{GREEDYDATA:output}"] }
+  }
+}
+
+#######
+# jmx #
+#######
+
+# Identify cache entries that we want to convert to a value between 0 and 100
+filter {
+  if [type] == "jmx" {
+    if [metric_path] in [
+    "alfresco.queryResultCache.cumulative_hitratio",
+    "alfresco.perSegFilter.cumulative_hitratio",
+    "alfresco.filterCache.cumulative_hitratio",
+    "alfresco.fieldValueCache.cumulative_hitratio",
+    "alfresco.documentCache.cumulative_hitratio",
+    "alfresco.alfrescoReaderCache.cumulative_hitratio",
+    "alfresco.alfrescoPathCache.cumulative_hitratio",
+    "alfresco.alfrescoOwnerCache.cumulative_hitratio",
+    "alfresco.alfrescoDeniedCache.cumulative_hitratio",
+    "alfresco.alfrescoAuthorityCache.cumulative_hitratio",
+    "alfresco.contentDataTransactionalCache.HitMissRatio",
+    "alfresco.immutableEntityTransactionalCache.HitMissRatio",
+    "alfresco.aspectsTransactionalCache.HitMissRatio",
+    "alfresco.childByNameTransactionalCache.HitMissRatio",
+    "alfresco.nodesTransactionalCache.HitMissRatio",
+    "alfresco.propertiesTransactionalCache.HitMissRatio",
+    "alfresco.rootNodesTransactionalCache.HitMissRatio",
+    "alfresco.propertyClassTransactionalCache.HitMissRatio",
+    "alfresco.propertyUniqueContextTransactionalCache.HitMissRatio",
+    "alfresco.propertyValueTransactionalCache.HitMissRatio",
+    "alfresco.solrFacetNodeRefTransactionalCache.HitMissRatio",
+    "alfresco.tenantEntityTransactionalCache.HitMissRatio",
+    "alfresco.loadedResourceBundlesTransactionalCache.HitMissRatio",
+    "alfresco.messagesTransactionalCache.HitMissRatio",
+    "alfresco.personTransactionalCache.HitMissRatio",
+    "alfresco.resourceBundleBaseNamesTransactionalCache.HitMissRatio",
+    "alfresco.routingContentStoreTransactionalCache.HitMissRatio",
+    "alfresco.userToAuthorityTransactionalCache.HitMissRatio",
+    "alfresco.zoneToAuthorityTransactionalCache.HitMissRatio",
+    "alfresco.Server_CPU.ProcessCpuLoad",
+    "alfresco.Server_CPU.SystemCpuLoad"
+   ] {
+     if [metric_value_number] {
+       ruby {
+         code => "event['metric_value_number'] = event['metric_value_number'] * 100"
+        }
+      }
+    }
+  }
+
+  if [metric_path] == "alfresco.Heap_Memory.HeapMemoryUsage.used" {
+    mutate {
+      add_tag => [ "used" ]
+    }
+  } else if [metric_path] == "alfresco.Heap_Memory.HeapMemoryUsage.committed" {
+    mutate {
+      add_tag => [ "committed" ]
+    }
+  } else if [metric_path] == "alfresco.Heap_Memory.HeapMemoryUsage.max" {
+    mutate {
+      add_tag => [ "max" ]
+    }
+  } else if [metric_path] == "alfresco.Repo_Server_Mgmt.TicketCountNonExpired" {
+    mutate {
+      add_tag => [ "Tickets_Non_Expired" ]
+    }
+  } else if [metric_path] == "alfresco.Repo_Server_Mgmt.UserCountNonExpired" {
+    mutate {
+      add_tag => [ "Users_Non_Expired" ]
+    }
+  } else if [metric_path] == "alfresco.Share_Active_Sessions.activeSessions" {
+    mutate {
+      add_tag => [ "Share_Sessions" ]
+    }
+  } else if [metric_path] == "alfresco.Operating_System.TotalSwapSpaceSize" {
+    mutate {
+      add_tag => [ "Total_Swap" ]
+    }
+  } else if [metric_path] == "alfresco.Operating_System.FreeSwapSpaceSize" {
+    mutate {
+      add_tag => [ "Free_Swap" ]
+    }
+  } else if [metric_path] == "alfresco.Operating_System.FreePhysicalMemorySize" {
+    mutate {
+      add_tag => [ "Free_Physical" ]
+    }
+  } else if [metric_path] == "alfresco.Operating_System.TotalPhysicalMemorySize" {
+    mutate {
+      add_tag => [ "Total_Physical" ]
+    }
+  } else if [metric_path] == "alfresco.Tomcat_HTTP_Threads.currentThreadsBusy" {
+    mutate {
+      add_tag => [ "Threads_Busy" ]
+    }
+  } else if [metric_path] == "alfresco.Tomcat_HTTP_Threads.currentThreadCount" {
+    mutate {
+      add_tag => [ "Threads_Count" ]
+    }
+  } else if [metric_path] == "alfresco.Tomcat_HTTP_Threads.MaxThreads" {
+    mutate {
+      add_tag => [ "Max_Threads" ]
+    }
+  } else if [metric_path] == "alfresco.Tomcat_AJP_Threads.currentThreadsBusy" {
+    mutate {
+      add_tag => [ "Threads_Busy" ]
+    }
+  } else if [metric_path] == "alfresco.Tomcat_AJP_Threads.currentThreadCount" {
+    mutate {
+      add_tag => [ "Threads_Count" ]
+    }
+  } else if [metric_path] == "alfresco.Tomcat_AJP_Threads.MaxThreads" {
+    mutate {
+      add_tag => [ "Max_Threads" ]
+    }
+  } else if [metric_path] == "alfresco.Tomcat_SSL_Threads.currentThreadsBusy" {
+    mutate {
+      add_tag => [ "Threads_Busy" ]
+    }
+  } else if [metric_path] == "alfresco.Tomcat_SSL_Threads.currentThreadCount" {
+    mutate {
+      add_tag => [ "Threads_Count" ]
+    }
+  } else if [metric_path] == "alfresco.Tomcat_SSL_Threads.MaxThreads" {
+    mutate {
+      add_tag => [ "Max_Threads" ]
+    }
+  } else if [metric_path] == "alfresco.Workflow_Information.NumberOfActivitiWorkflowDefinitionsDeployed" {
+    mutate {
+      add_tag => [ "Workflow_Definitions" ]
+    }
+  } else if [metric_path] == "alfresco.Workflow_Information.NumberOfActivitiWorkflowInstances" {
+    mutate {
+      add_tag => [ "Workflow_Instances" ]
+    }
+  } else if [metric_path] == "alfresco.Workflow_Information.NumberOfActivitiTaskInstances" {
+    mutate {
+      add_tag => [ "Task_Instances" ]
+    }
+  } else if [metric_path] == "alfresco.DB_Connection_Pool.NumActive" {
+    mutate {
+      add_tag => [ "Active_DB_Conns" ]
+    }
+  } else if [metric_path] == "alfresco.DB_Connection_Pool.MaxActive" {
+    mutate {
+      add_tag => [ "Max_DB_Conns" ]
+    }
+  } else if [metric_path] == "alfresco.Operating_System.OpenFileDescriptorCount" {
+    mutate {
+      add_tag => [ "Open_Files" ]
+    }
+  } else if [metric_path] == "alfresco.Disk_ContentStore.SpaceFree" {
+    mutate {
+      add_tag => [ "Free_disk_space" ]
+    }
+  } else if [metric_path] == "alfresco.Disk_ContentStore.SpaceTotal" {
+    mutate {
+      add_tag => [ "Total_disk_space" ]
+    }
+  } 
+
+  # Convert string metric to numeric value
+  if [metric_value_string] {
+    mutate {
+      add_field => [ "value", "%{metric_value_string}" ]
+      convert => [ "metric_value_number", "float" ]
+      remove_field => [ "metric_value_string" ]
+    }
+  }
+
+  # Renames the 'metric_value_number' field to 'value'
+  mutate {
+    rename => { "metric_value_number" => "value" }
+  }
+}
+
+################################
+# Filter for Tomcat Access log #
+################################
+
+filter {
+  if "TomcatAccessLog" in [tags] {
+    grok {
+      match => [ "message", "%{IPORHOST:clientip} %{USER:ident} %{DATA:auth} \[%{HTTPDATE:timestamp}\] \"(%{WORD:verb} %{NOTSPACE:request} (HTTP/%{NUMBER:httpversion})?|%{DATA:rawrequest})\" %{NUMBER:response} (?:%{NUMBER:bytes}|-) %{QS:referrer} %{QS:agent} %{NUMBER:responseTime:float} \"%{DATA:thread}\"" ]
+    }
+
+    date {
+      match => [ "timestamp" , "dd/MMM/YYYY:HH:mm:ss Z" ]
+      target => "@timestamp"
+    }
+  }
+}
+
+# Drop unwanted data
+filter {
+  mutate {
+    remove_field => [ 'message' ]
+    remove_field => [ 'data' ]
+    remove_field => [ 'logdate' ]
+    remove_tag => [ '_grokparsefailure' ]
+  }
+}
+
+###########################
+# output to elasticsearch #
+###########################
+
+output {
+ 
+	  elasticsearch {
+	    hosts => "localhost:9200"
+	    manage_template => false
+	    index => "%{[@metadata][beat]}-%{+YYYY.MM.dd}"
+	    document_type => "%{[@metadata][type]}"
+	  }
+#	stdout { codec => rubydebug { metadata => true } } 
+}

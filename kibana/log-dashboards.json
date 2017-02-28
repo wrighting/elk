@@ -1,0 +1,38 @@
+[
+  {
+    "_id": "Alfresco-Logs",
+    "_type": "dashboard",
+    "_source": {
+      "title": "Alfresco Logs",
+      "hits": 0,
+      "description": "",
+      "panelsJSON": "[{\"id\":\"Alfresco-Logs-Histogram\",\"type\":\"visualization\",\"panelIndex\":1,\"size_x\":9,\"size_y\":3,\"col\":1,\"row\":1},{\"id\":\"Alfresco-Logs-Table\",\"type\":\"visualization\",\"panelIndex\":2,\"size_x\":3,\"size_y\":3,\"col\":10,\"row\":1},{\"id\":\"Alfresco-Java-Class-Table\",\"type\":\"visualization\",\"panelIndex\":3,\"size_x\":12,\"size_y\":3,\"col\":1,\"row\":8},{\"id\":\"Alfresco-Logs\",\"type\":\"search\",\"panelIndex\":6,\"size_x\":12,\"size_y\":4,\"col\":1,\"row\":4,\"columns\":[\"logLevel\",\"class\",\"Msg\",\"path\",\"host\"],\"sort\":[\"@timestamp\",\"desc\"]}]",
+      "optionsJSON": "{\"darkTheme\":false}",
+      "uiStateJSON": "{}",
+      "version": 1,
+      "timeRestore": true,
+      "timeTo": "now/d",
+      "timeFrom": "now/d",
+      "kibanaSavedObjectMeta": {
+        "searchSourceJSON": "{\"filter\":[{\"query\":{\"query_string\":{\"query\":\"*\",\"analyze_wildcard\":true}}}]}"
+      }
+    }
+  },
+  {
+    "_id": "037771a0-fa86-11e6-9e9f-6b63bc77c40d",
+    "_type": "dashboard",
+    "_source": {
+      "title": "Tomcat Responses",
+      "hits": 0,
+      "description": "",
+      "panelsJSON": "[{\"size_x\":3,\"size_y\":2,\"panelIndex\":1,\"type\":\"visualization\",\"id\":\"Tomcat-Response-Count\",\"col\":1,\"row\":1},{\"size_x\":3,\"size_y\":2,\"panelIndex\":2,\"type\":\"visualization\",\"id\":\"Tomcat-Response-Time\",\"col\":4,\"row\":1},{\"size_x\":12,\"size_y\":5,\"panelIndex\":3,\"type\":\"visualization\",\"id\":\"Tomcat-Access-Logs-Table\",\"col\":1,\"row\":3}]",
+      "optionsJSON": "{\"darkTheme\":false}",
+      "uiStateJSON": "{\"P-1\":{\"vis\":{\"params\":{\"sort\":{\"columnIndex\":null,\"direction\":null}}}},\"P-3\":{\"vis\":{\"params\":{\"sort\":{\"columnIndex\":null,\"direction\":null}}}}}",
+      "version": 1,
+      "timeRestore": false,
+      "kibanaSavedObjectMeta": {
+        "searchSourceJSON": "{\"filter\":[{\"query\":{\"query_string\":{\"query\":\"*\",\"analyze_wildcard\":true}}}]}"
+      }
+    }
+  }
+]
